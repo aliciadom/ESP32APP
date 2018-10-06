@@ -100,3 +100,10 @@ string Packet::toString()
             append(to_string(this->y_pos));
     return s;
 }
+
+string Packet::generateHash(string src)
+{
+    QByteArray bytes = QByteArray::fromStdString(src);
+    QString string = QString(QCryptographicHash::hash(bytes,QCryptographicHash::Md5).toHex());
+    return string.toUtf8().constData();
+}

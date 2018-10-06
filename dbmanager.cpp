@@ -1,12 +1,11 @@
 #include "dbmanager.h"
 #include <thread>
-#include "globals.h"
-
 
 DbManager::DbManager(QObject *parent) : QThread(parent)
 {
     db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName("database.sqlite3");
+    //db.setDatabaseName("database.sqlite3");
+    db.setDatabaseName("sniff.db");
 }
 
 DbManager::~DbManager()
@@ -15,45 +14,18 @@ DbManager::~DbManager()
         db.close();
 }
 
-void DbManager::executeQuery(QListPacket packets,int row, int column)
+void DbManager::querySlot(uint from, uint to, QListESP32 esp32devices)
 {
     QSqlQuery query;
-    int ESP32ID, EXPOS, EYPOS, RSSI;
-    uint TIMESTAMP;
-    string MAC, SSID, HASH;
-    for(Packet p: packets)
-    {
-        ESP32ID = p.getESP32();
-        EXPOS = p.getESP32_x();
-        EYPOS = p.getESP32_y();
-        TIMESTAMP = p.getTimestamp();
-        RSSI = p.getRSSI();
-        MAC = p.getMAC();
-        SSID = p.getSSID();
-        HASH = p.getHash();
-        query.prepare("INSERT INTO packets (ESP, EXPOS, EYPOS, MAC, TIMESTAMP, RSSI, SSID, HASH, XPOS, YPOS) "
-                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        query.addBindValue(ESP32ID);
-        query.addBindValue(EXPOS);
-        query.addBindValue(EYPOS);
-        query.addBindValue(QString::fromStdString(MAC));
-        query.addBindValue(TIMESTAMP);
-        query.addBindValue(RSSI);
-        query.addBindValue(QString::fromStdString(SSID));
-        query.addBindValue(QString::fromStdString(HASH));
-        query.addBindValue(column);
-        query.addBindValue(row);
-        query.exec();
-    }
-}
-
-void DbManager::selectQuery(uint from, uint to)
-{
-    QSqlQuery query;
-    QList<Packet> packets;
-    query.prepare("SELECT * FROM packets WHERE TIMESTAMP <= ? AND TIMESTAMP >= ?");
+    QMapHashPacket map;
+    query.prepare("SELECT ESPID,X,Y,MAC,TIMESTAMP,RSSI,SSID FROM SNIFF WHERE (TIMESTAMP,MAC) IN"
+                  "(SELECT TIMESTAMP,MAC FROM SNIFF"
+                  " WHERE TIMESTAMP <= ? AND TIMESTAMP >= ?"
+                  " GROUP BY TIMESTAMP,MAC"
+                  " HAVING COUNT(DISTINCT ESPID)=?)");
     query.bindValue( 0, to );
     query.bindValue( 1, from );
+    query.bindValue( 2, esp32devices.count() );
 
     if( !query.exec() )
     {
@@ -63,30 +35,61 @@ void DbManager::selectQuery(uint from, uint to)
 
     while( query.next() )
     {
-        int esp32id = query.value( 0 ).toInt();
+        int esp32id = query.value( 0 ).toInt()-1;
         int expos = query.value( 1 ).toInt();
         int eypos = query.value( 2 ).toInt();
         string mac = query.value( 3 ).toString().toStdString();
+        string tmstmp = query.value( 4 ).toString().toStdString();
         uint timestamp = query.value( 4 ).toUInt();
         int rssi = query.value( 5 ).toInt();
         string ssid = query.value( 6 ).toString().toStdString();
-        string hash = query.value( 7 ).toString().toStdString();
-        int xpos = query.value( 8 ).toInt();
-        int ypos = query.value( 9 ).toInt();
-        if(expos == esp32devices.find(esp32id).value().getX() && eypos == esp32devices.find(esp32id).value().getY())
-            packets.push_back(Packet(esp32id,expos,eypos,timestamp,rssi,mac,ssid,hash,xpos,ypos));
+        string hash = Packet::generateHash(mac+tmstmp);
+        if(esp32devices.length()>esp32id)
+        {
+            ESP32 e = esp32devices.at(esp32id);
+            if(expos == e.getX() && eypos == e.getY())
+            {
+                Packet p(esp32id,expos,eypos,timestamp,rssi,mac,ssid,hash);
+                if(!map.contains(hash))
+                {
+                    QListPacket list;
+                    list.push_back(p);
+                    map.insert(hash,list);
+                }
+                else
+                {
+
+                    bool flag = true;
+                    //make sure to insert a packet(esp32,hash) only one time
+                    for(Packet pck : map[hash])
+                    {
+                        int esp32id = pck.getESP32();
+                        if(esp32id == p.getESP32())
+                        {
+                            //skip this packet
+                            flag = false;
+                        }
+                    }
+                    if(flag)
+                    map[hash].push_back(p);
+
+                }
+            }
+        }
     }
-    emit doUpdateGrid(packets);
+    emit updateGridSignal(map);
 }
 
 void DbManager::run()
 {
     if(!db.open())
     {
+        qDebug() << "Impossible open db";
         return;
     }
     else
     {
+        qDebug() << "db opend";
         connect(this,SIGNAL(finished()),this,SLOT(quit()));
         exec();
     }

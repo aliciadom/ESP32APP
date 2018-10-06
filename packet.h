@@ -1,5 +1,7 @@
 #ifndef PACKET_H
 #define PACKET_H
+#include <QString>
+#include <QCryptographicHash>
 #include <string>
 using namespace std;
 class Packet
@@ -31,6 +33,7 @@ public:
     int getY();
     void setX(int);
     void setY(int);
+    static string generateHash(string);
 };
 
 #endif // PACKET_H

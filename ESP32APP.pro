@@ -4,7 +4,8 @@
 #
 #-------------------------------------------------
 
-QT       += core gui
+QT       += core gui    \
+            sql
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -26,13 +27,23 @@ CONFIG += c++11
 
 SOURCES += \
         main.cpp \
-        mainwindow.cpp
+        mainwindow.cpp \
+    cell.cpp \
+    esp.cpp \
+    packet.cpp \
+    dbmanager.cpp
 
 HEADERS += \
-        mainwindow.h
+        mainwindow.h \
+    cell.h \
+    esp.h \
+    packet.h \
+    dbmanager.h
 
 FORMS += \
         mainwindow.ui
+
+LIBS += -lssl -lcrypto
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

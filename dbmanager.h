@@ -1,9 +1,12 @@
 #ifndef DBMANAGER_H
 #define DBMANAGER_H
 #include <QtSql>
-#include "globals.h"
+#include "packet.h"
+#include "esp.h"
 using namespace std;
-
+typedef QList<Packet> QListPacket;
+typedef QList<ESP32> QListESP32;
+typedef QMap<string,QListPacket> QMapHashPacket;
 class DbManager : public QThread
 {
     Q_OBJECT
@@ -12,10 +15,9 @@ public:
     ~DbManager();
     void run();
 public slots:
-    void executeQuery(QListPacket,int, int);
-    void selectQuery(uint,uint);
+    void querySlot(uint,uint, QListESP32);
 signals:
-    void doUpdateGrid(QListPacket);
+    void updateGridSignal(QMapHashPacket);
 private:
      QSqlDatabase db;
 };
