@@ -33,6 +33,9 @@ void DbManager::querySlot(uint from, uint to, QListESP32 esp32devices)
         return;
     }
 
+    qDebug() << from;
+    qDebug() << to;
+
     while( query.next() )
     {
         int esp32id = query.value( 0 ).toInt()-1;
@@ -55,6 +58,7 @@ void DbManager::querySlot(uint from, uint to, QListESP32 esp32devices)
                     QListPacket list;
                     list.push_back(p);
                     map.insert(hash,list);
+                    qDebug() << QString::fromStdString(p.toString());
                 }
                 else
                 {
@@ -71,7 +75,11 @@ void DbManager::querySlot(uint from, uint to, QListESP32 esp32devices)
                         }
                     }
                     if(flag)
-                    map[hash].push_back(p);
+                    {
+                        map[hash].push_back(p);
+                        qDebug() << QString::fromStdString(p.toString());
+                    }
+
 
                 }
             }
