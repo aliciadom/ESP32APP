@@ -13,10 +13,17 @@
 #include <QtCharts>
 #include <QDateTimeAxis>
 
+#include "worker.h"
+
+#include <QThread>
+
+
 using namespace std;
 
 using namespace QtCharts;
 typedef QMap<uint,QList<string>> QMapList;
+typedef QList<QPair<Packet,QPoint>> QPackets;
+
 
 namespace Ui {
 class MainWindow;
@@ -40,11 +47,14 @@ signals:
     void querySignal(uint from, uint to,QListESP32 ESP32devices);
     void updateCellGridSignal(int row,int column,QString tooltip);
     void updateChartLayoutSignal(QMapList map);
+
+    void doWorkSignal();
 public slots:
    void buttonUpdateSlot();
    void realTimeButtonSlot();
    void updateRealTimeSlot();
    void updateGridLayoutSlot(QMapHashPacket);
+   void updateGridLayoutSlot2(QPackets packets , QChartMap chartmap, int ndevices);
    void updateCellGridSlot(int row,int column,QString tooltip);
    void setAccuracySlot();
    /**/
@@ -65,6 +75,9 @@ private:
     QBarCategoryAxis *axisX;
     QValueAxis *axisY;
     bool isChartClean;
+
+    QThread *thread;
+    Worker *worker;
 
 
 };

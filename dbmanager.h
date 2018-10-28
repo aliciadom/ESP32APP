@@ -14,12 +14,14 @@ public:
     explicit DbManager(QObject *parent = nullptr);
     ~DbManager();
     void run();
+    bool isESP32Cell(int row, int column, QList<ESP32> devices);
 public slots:
     void querySlot(uint,uint, QListESP32);
 signals:
     void updateGridSignal(QMapHashPacket);
 private:
      QSqlDatabase db;
+
 };
 
 #endif // DBMANAGER_H

@@ -18,7 +18,18 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(&timer,SIGNAL(timeout()), this, SLOT(updateRealTimeSlot()));
     connect(ui->spinBox, SIGNAL(valueChanged(int)),this, SLOT(setAccuracySlot()));
     connect(this,SIGNAL(updateChartLayoutSignal(QMapList)),this,SLOT(updateChartLayoutSlot(QMapList)));
+
+    qRegisterMetaType<QPackets>("QPackets");
+    qRegisterMetaType<QChartMap>("QChartMap");
+
+    thread = new QThread();
+    worker = new Worker();
+    worker->moveToThread(thread);
+    connect(this,SIGNAL(doWorkSignal()), worker, SLOT(doWorkSlot()));
+    connect(worker, SIGNAL(resultReadySignal(QPackets, QChartMap, int)), this, SLOT(updateGridLayoutSlot2(QPackets, QChartMap, int)));
+
     db.start();
+    thread->start();
 }
 
 MainWindow::~MainWindow()
@@ -152,172 +163,40 @@ void MainWindow::buttonUpdateSlot()
 void MainWindow::updateGridLayoutSlot(QMapHashPacket hashmap)
 {
     QMap<uint,QList<string>> chartmap;
-    clearGridLayout();
     qDebug() << "updateGridLayoutSlot()..";
     distinctdevices.clear();
+
+    worker->SetheckBoxIsChecked(ui->checkBox->isChecked());
+    worker->SetQMapHashPacket(hashmap);
+    worker->setAccuracy(accuracy);
+    worker->setUtil(nesp32,x_min,x_max,y_min,y_max);
+    worker->setEsp32Devices(esp32devices);
+
     if(!hashmap.isEmpty())
     {
-        if(ui->checkBox->isChecked())
-        {
-            qDebug() << "CheckBox on..";
-            // this map store the most recent position for a mac. mac<<time,places in the map>>
-            QMap<string,QPair<uint,QList<QPoint>>> recentMacPositionMap;
-            for (int i = 0; i < ROW; i++)
-            {
-                for(int j = 0; j< COLUMN; j++)
-                {
-                    if(!isESP32Cell(i,j))
-                    {
-                        QString s;
-                        for (string hash : hashmap.keys())
-                        {
-                            int count = 0;
-                            for(Packet p : hashmap[hash])
-                            {
-                                int esp32id = p.getESP32();
-                                ESP32 esp32 = esp32devices.find(esp32id).value();
-                                double esp32rssi = esp32.getCell(j,i).getrssi();
-                                if(inRange(p.getRSSI(),static_cast<int>(esp32rssi),accuracy) && validBorder(i,j,y_min,y_max,x_min,x_max))
-                                {
-                                    count++;
-                                }
-                            }
-                            if(count == nesp32)
-                            {
-                                Packet p = hashmap[hash][0];
-                                string packethash = p.getHash();
-                                string mac = p.getMAC();
-                                uint unixtime = p.getTimestamp();
-                                if(!recentMacPositionMap.contains(mac))
-                                {
-                                        QList<QPoint> list;
-                                        QPoint qpoint(j,i);
-                                        list.push_back(qpoint);
-                                        QPair<uint,QList<QPoint>> qpair;
-                                        qpair.first = unixtime;
-                                        qpair.second = list;
-                                        recentMacPositionMap.insert(mac,qpair);
-                                }
-                                else
-                                {
-                                    QPair<uint,QList<QPoint>> qpair = recentMacPositionMap.value(mac);
-                                    if(qpair.first<unixtime)
-                                    {
-                                        recentMacPositionMap.remove(mac);
-                                        QList<QPoint> list;
-                                        QPoint qpoint(j,i);
-                                        list.push_back(qpoint);
-                                        QPair<uint,QList<QPoint>> nqpair;
-                                        nqpair.first = unixtime;
-                                        nqpair.second = list;
-                                        recentMacPositionMap.insert(mac,nqpair);
-                                    }
-                                    else if(qpair.first==unixtime)
-                                    {
-                                          QPoint qpoint(j,i);
-                                          recentMacPositionMap[mac].second.push_back(qpoint);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            for(string s : recentMacPositionMap.keys())
-            {
-                QPair<uint,QList<QPoint>> qpair = recentMacPositionMap.value(s);
-                string hash = Packet::generateHash(s+to_string(qpair.first));
-                Packet p = hashmap.value(hash)[0];
-                uint unixtime = p.getTimestamp();
-                QDateTime time;
-                time.setTime_t(unixtime);
-                for(QPoint qp : qpair.second)
-                {
-                    QString s;
-                    int j = qp.x();
-                    int i = qp.y();
-                    s.append("{\n\tMAC: ").append(QString::fromUtf8(p.getMAC().c_str())).append("\n\t:").append(time.toString()).append("\n}\n");
-                    emit updateCellGridSignal(i,j,s);
-                }
-                if(!chartmap.contains(unixtime))
-                {
-                    QList<string> list;
-                    list.append(s);
-                    chartmap.insert(unixtime,list);
-                }
-                else
-                {
-                    QList<string> list = chartmap.value(unixtime);
-                    if(!list.contains(s))
-                        list.append(s);
-                }
-                if(!distinctdevices.contains(hash))
-                {
-                    distinctdevices.push_back(hash);
-                }
-            }
-        }
-        else
-        {
-            qDebug() << "CheckBox off..";
-            for (int i = 0; i < ROW; i++)
-            {
-                for(int j = 0; j< COLUMN; j++)
-                {
-                    if(!isESP32Cell(i,j))
-                    {
-                        QString s;
-                        for (string hash : hashmap.keys())
-                        {
-                            int count = 0;
-                            for(Packet p : hashmap[hash])
-                            {
-                                int esp32id = p.getESP32();
-                                ESP32 esp32 = esp32devices.find(esp32id).value();
-                                double esp32rssi = esp32.getCell(j,i).getrssi();
-                                if(inRange(p.getRSSI(),static_cast<int>(esp32rssi),accuracy) && validBorder(i,j,y_min,y_max,x_min,x_max))
-                                {
-                                    count++;
-                                }
-                            }
-                            if(count == nesp32)
-                            {
-
-                                Packet p = hashmap[hash][0];
-                                string packethash = p.getHash();
-                                string mac = p.getMAC();
-                                uint unixtime = p.getTimestamp();
-                                QDateTime time;
-                                time.setTime_t(unixtime);
-                                s.append("{\n\tMAC: ").append(QString::fromUtf8(p.getMAC().c_str())).append("\n\t:").append(time.toString()).append("\n}\n");
-                                if(!distinctdevices.contains(packethash))
-                                {
-                                    distinctdevices.push_back(packethash);
-                                }
-                                if(!chartmap.contains(unixtime))
-                                {
-                                    QList<string> list;
-                                    list.append(mac);
-                                    chartmap.insert(unixtime,list);
-                                }
-                                else
-                                {
-                                    QList<string> list = chartmap.value(unixtime);
-                                    if(!list.contains(mac))
-                                        list.append(mac);
-
-                                }
-
-                                emit updateCellGridSignal(i,j,s);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        emit doWorkSignal();
     }
-    ui->deviceslabel->setText(QString::number(distinctdevices.count()));
+
+    qDebug() << "updateGridLayoutSlot() finished";
+}
+void MainWindow::updateGridLayoutSlot2(QPackets packets , QChartMap chartmap, int ndevices)
+{
+    clearGridLayout();
+    for(QPair<Packet,QPoint> qp : packets)
+    {
+        QString s;
+        Packet p = qp.first;
+        QPoint point = qp.second;
+        string packethash = p.getHash();
+        string mac = p.getMAC();
+        uint unixtime = p.getTimestamp();
+        QDateTime time;
+        time.setTime_t(unixtime);
+        s.append("{\n\tMAC: ").append(QString::fromUtf8(p.getMAC().c_str())).append("\n\t:").append(time.toString()).append("\n}\n");
+        emit updateCellGridSignal(point.ry(),point.rx(),s);
+    }
     emit updateChartLayoutSignal(chartmap);
+    ui->deviceslabel->setText(QString::number(ndevices));
 }
 void MainWindow::updateCellGridSlot(int row, int column, QString tooltip)
 {
@@ -411,9 +290,11 @@ void MainWindow::setupChartLayout()
     axisY->setLabelFormat("%i");
     axisY->setRange(0,1);
     //X
+    QFont labelsFont;
+    labelsFont.setPixelSize(10);
     axisX->setTitleText(to.date().toString());
     axisX->append(categories);
-
+    axisX->setLabelsFont(labelsFont);
     //series
     series->append(high);
 

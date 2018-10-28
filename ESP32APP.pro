@@ -31,14 +31,16 @@ SOURCES += \
     cell.cpp \
     esp.cpp \
     packet.cpp \
-    dbmanager.cpp
+    dbmanager.cpp \
+    worker.cpp
 
 HEADERS += \
         mainwindow.h \
     cell.h \
     esp.h \
     packet.h \
-    dbmanager.h
+    dbmanager.h \
+    worker.h
 
 FORMS += \
         mainwindow.ui

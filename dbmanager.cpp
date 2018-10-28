@@ -1,5 +1,4 @@
 #include "dbmanager.h"
-#include <thread>
 
 DbManager::DbManager(QObject *parent) : QThread(parent)
 {
@@ -102,4 +101,16 @@ void DbManager::run()
         exec();
     }
 
+}
+
+bool DbManager::isESP32Cell(int row, int column, QList<ESP32> devices)
+{
+    for(auto value : devices)
+    {
+        if(value.getX() == column && value.getY() == row)
+        {
+            return true;
+        }
+    }
+    return false;
 }
