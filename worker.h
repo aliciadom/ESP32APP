@@ -9,7 +9,8 @@
 #include <packet.h>
 #include <esp.h>
 #include <thread>
-
+#include <QMutex>
+#include <QMutexLocker>
 
 typedef QList<QPair<Packet,QPoint>> QPackets;
 typedef QMap<uint,QList<string>> QChartMap;
@@ -25,6 +26,7 @@ public:
 
 public slots:
     void doWorkSlot();
+    void stopWorkerSlot();
     void SetheckBoxIsChecked(bool checkBoxIsChecked);
     void SetQMapHashPacket(QMapHashPacket hashmap);
     void setAccuracy(int accuracy);
@@ -32,7 +34,8 @@ public slots:
     void setEsp32Devices(QMap<int, ESP32> esp32devices);
 signals:
     void resultReadySignal(QPackets packets, QChartMap chartmap, int distinctDevices);
-
+    void enableUpdateButtonSignal();
+    void updateStateSignal();
 private:
     bool isESP32Cell(int row, int column, QList<ESP32> esp32devices);
     bool inRange(int packet, int esp32, int accuracy);
@@ -47,12 +50,16 @@ private:
     int x_min;
     int y_max;
     int x_max;
+    void do_Work();
 
     QPackets packets;
     QList<string> distinctdevices;
     QMap<uint,QList<string>> chartmap;
     void job0(int x_start, int x_end, int y_start, int y_end);
     void job1(int x_start, int x_end, int y_start, int y_end);
+
+    bool running,stopped;
+    QMutex *mutex;
 };
 
 

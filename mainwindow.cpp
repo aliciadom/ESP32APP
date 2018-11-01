@@ -19,6 +19,8 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->spinBox, SIGNAL(valueChanged(int)),this, SLOT(setAccuracySlot()));
     connect(this,SIGNAL(updateChartLayoutSignal(QMapList)),this,SLOT(updateChartLayoutSlot(QMapList)));
 
+
+
     qRegisterMetaType<QPackets>("QPackets");
     qRegisterMetaType<QChartMap>("QChartMap");
 
@@ -26,7 +28,9 @@ MainWindow::MainWindow(QWidget *parent) :
     worker = new Worker();
     worker->moveToThread(thread);
     connect(this,SIGNAL(doWorkSignal()), worker, SLOT(doWorkSlot()));
+    connect(this,SIGNAL(stopWorkerSignal()), worker, SLOT(stopWorkerSlot()));
     connect(worker, SIGNAL(resultReadySignal(QPackets, QChartMap, int)), this, SLOT(updateGridLayoutSlot2(QPackets, QChartMap, int)));
+
 
     db.start();
     thread->start();
@@ -151,14 +155,56 @@ void MainWindow::clearGridLayout()
         }
     }
 }
+/*
+ * Real time mode
+*/
+void MainWindow::realTimeButtonSlot()
+{
+    if(ui->startButton->text()=="TEMPO REALE")
+    {
+            ui->startButton->setText("STOP TEMPO REALE");
+            ui->deviceslabel->setText(QString::number(0));
+            //switch off
+            ui->buttonUpdate->setEnabled(false);
+            ui->dateTimeFrom->setEnabled(false);
+            ui->spinBox->setEnabled(false);
+            ui->checkBox->setEnabled(false);
+            timer.start(1000*40);
+
+    }
+    else
+    {
+        ui->startButton->setText("TEMPO REALE");
+        timer.stop();
+        //switch on
+        ui->buttonUpdate->setEnabled(true);
+        ui->dateTimeFrom->setEnabled(true);
+        ui->spinBox->setEnabled(true);
+        ui->checkBox->setEnabled(true);
+
+    }
+
+}
 void MainWindow::buttonUpdateSlot()
 {
-    QDateTime from = ui->dateTimeFrom->dateTime();
-    uint unixtimefrom = from.toTime_t();
-    uint unixtimeto = unixtimefrom+(60*5);
-    ui->deviceslabel->setText(QString::number(0));
-    distinctdevices.clear();
-    emit querySignal(unixtimefrom,unixtimeto,esp32devices.values());
+    if(ui->buttonUpdate->text()=="AGGIORNA")
+    {
+            ui->buttonUpdate->setText("ANNULLA ANALISI");
+            QDateTime from = ui->dateTimeFrom->dateTime();
+            uint unixtimefrom = from.toTime_t();
+            uint unixtimeto = unixtimefrom+(60*5);
+            ui->deviceslabel->setText(QString::number(0));
+            distinctdevices.clear();
+            emit querySignal(unixtimefrom,unixtimeto,esp32devices.values());
+
+    }
+    else
+    {
+        ui->buttonUpdate->setText("AGGIORNA");
+        emit stopWorkerSignal();
+
+    }
+
 }
 void MainWindow::updateGridLayoutSlot(QMapHashPacket hashmap)
 {
@@ -174,7 +220,12 @@ void MainWindow::updateGridLayoutSlot(QMapHashPacket hashmap)
 
     if(!hashmap.isEmpty())
     {
+        //ui->buttonUpdate->setEnabled(false);
         emit doWorkSignal();
+    }
+    else
+    {
+            ui->buttonUpdate->setText("AGGIORNA");
     }
 
     qDebug() << "updateGridLayoutSlot() finished";
@@ -196,6 +247,7 @@ void MainWindow::updateGridLayoutSlot2(QPackets packets , QChartMap chartmap, in
         emit updateCellGridSignal(point.ry(),point.rx(),s);
     }
     emit updateChartLayoutSignal(chartmap);
+    ui->buttonUpdate->setText("AGGIORNA");
     ui->deviceslabel->setText(QString::number(ndevices));
 }
 void MainWindow::updateCellGridSlot(int row, int column, QString tooltip)
@@ -232,36 +284,7 @@ void MainWindow::setAccuracySlot()
 {
     accuracy = ui->spinBox->value();
 }
-/*
- * Real time mode
-*/
-void MainWindow::realTimeButtonSlot()
-{
-    if(ui->startButton->text()=="TEMPO REALE")
-    {
-            ui->startButton->setText("STOP TEMPO REALE");
-            ui->deviceslabel->setText(QString::number(0));
-            //switch off
-            ui->buttonUpdate->setEnabled(false);
-            ui->dateTimeFrom->setEnabled(false);
-            ui->spinBox->setEnabled(false);
-            ui->checkBox->setEnabled(false);
-            timer.start(1000*40);
 
-    }
-    else
-    {
-        ui->startButton->setText("TEMPO REALE");
-        timer.stop();
-        //switch on
-        ui->buttonUpdate->setEnabled(true);
-        ui->dateTimeFrom->setEnabled(true);
-        ui->spinBox->setEnabled(true);
-        ui->checkBox->setEnabled(true);
-
-    }
-
-}
 void MainWindow::updateRealTimeSlot()
 {
     QDateTime to = QDateTime::currentDateTime();
@@ -353,3 +376,5 @@ void MainWindow::updateChartLayoutSlot(QMapList map)
         axisY->setTickCount(2);
     }
 }
+
+

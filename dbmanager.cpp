@@ -57,7 +57,7 @@ void DbManager::querySlot(uint from, uint to, QListESP32 esp32devices)
                     QListPacket list;
                     list.push_back(p);
                     map.insert(hash,list);
-                    qDebug() << QString::fromStdString(p.toString());
+                    //qDebug() << QString::fromStdString(p.toString());
                 }
                 else
                 {
@@ -76,7 +76,7 @@ void DbManager::querySlot(uint from, uint to, QListESP32 esp32devices)
                     if(flag)
                     {
                         map[hash].push_back(p);
-                        qDebug() << QString::fromStdString(p.toString());
+                        //qDebug() << QString::fromStdString(p.toString());
                     }
 
 

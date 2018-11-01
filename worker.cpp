@@ -1,18 +1,31 @@
 #include "worker.h"
 #include <QDebug>
+#include <QMetaObject>
+#include <QtConcurrent/QtConcurrent>
 
-Worker::Worker(){
+Worker::Worker():running(false),stopped(false){
+    mutex = new QMutex();
 }
 
 Worker::~Worker() {
 }
 
 void Worker::job0(int x_start, int x_end, int y_start, int y_end){
-    qDebug() << "only recent pos";
+    qDebug() << "job0 started";
     for (int i = y_start; i < y_end; i++)
     {
+        {
+                   QMutexLocker locker(mutex);
+                   if(stopped)
+                       return;
+        }
         for(int j = x_start; j< x_end; j++)
         {
+            {
+                       QMutexLocker locker(mutex);
+                       if(stopped)
+                           return;
+            }
             if(!isESP32Cell(i,j,esp32devices.values()))
             {
                 QString s;
@@ -70,9 +83,6 @@ void Worker::job0(int x_start, int x_end, int y_start, int y_end){
             }
         }
     }
-
-
-
     for(string s : recentMacPositionMap.keys())
     {
         QPair<uint,QList<QPoint>> qpair = recentMacPositionMap.value(s);
@@ -81,9 +91,6 @@ void Worker::job0(int x_start, int x_end, int y_start, int y_end){
         uint unixtime = p.getTimestamp();
         QDateTime time;
         time.setTime_t(unixtime);
-
-
-
 
         for(QPoint qp : qpair.second)
         {
@@ -111,11 +118,21 @@ void Worker::job0(int x_start, int x_end, int y_start, int y_end){
     }
 }
 void Worker::job1(int x_start, int x_end, int y_start, int y_end){
-    qDebug() << "not only recent pos";
+    qDebug() << "job1 started";
     for (int i = y_start; i < y_end; i++)
     {
+        {
+                   QMutexLocker locker(mutex);
+                   if(stopped)
+                       return;
+        }
         for(int j = x_start; j< x_end; j++)
                     {
+            {
+                       QMutexLocker locker(mutex);
+                       if(stopped)
+                           return;
+            }
                         if(!isESP32Cell(i,j,esp32devices.values()))
                         {
                             QString s;
@@ -165,28 +182,82 @@ void Worker::job1(int x_start, int x_end, int y_start, int y_end){
                             }
                         }
                     }
-                }
+    }
 }
 
+void Worker::do_Work(){
 
-void Worker::doWorkSlot() {
-
-    qDebug() << "here the work accuracy,xmin,xmax,ymin,ymax = " + QString::number(accuracy) + QString::number(x_min) + QString::number(x_max) +QString::number(y_min) + QString::number(y_max);
+    qDebug() << "do_Work called.. accuracy,xmin,xmax,ymin,ymax = " + QString::number(accuracy) +" " + QString::number(x_min) +" " + QString::number(x_max) +" " +QString::number(y_min) +" " + QString::number(y_max);
 
     packets.clear();
     distinctdevices.clear();
     chartmap.clear();
+
     if(checkBoxIsChecked)
     {
-       job0(x_min+1,x_max,y_min+1,y_max);
+        std::thread t([&](){
+            job0(x_min+1,x_max,y_min+1,y_max);
+            {
+                QMutexLocker ml(mutex);
+                if(!stopped){
+                    running = false;
+                    qDebug() << "job1 finished analysis";
+                    qDebug() << distinctdevices.count();
+                    emit resultReadySignal(packets, chartmap, distinctdevices.count());
+                }
+                else{
+                    qDebug() << "job1 forced quit";
+                    running = true;
+                    stopped = false;
+                    do_Work();
+                };
+            }
+        });
+        t.detach();
+
+
 
     }
     else
     {
-        job1(x_min+1,x_max,y_min+1,y_max);
+        std::thread t([&](){
+            job1(x_min+1,x_max,y_min+1,y_max);
+            {
+                QMutexLocker ml(mutex);
+
+                if(!stopped){
+                    running = false;
+                    qDebug() << "job1 finished analysis";
+                    qDebug() << distinctdevices.count();
+                    emit resultReadySignal(packets, chartmap, distinctdevices.count());
+                }
+                else{
+                    qDebug() << "job1 forced quit";
+                    running = false;
+                    stopped = false;
+                };
+            }
+        });
+        t.detach();
+
     }
-    qDebug() << distinctdevices.count();
-    emit resultReadySignal(packets, chartmap, distinctdevices.count());
+
+}
+void Worker::doWorkSlot() {
+    QMutexLocker locker(mutex);
+    if(!running)
+    {
+        running = true;
+        do_Work();
+    }
+}
+
+void Worker::stopWorkerSlot() {
+    QMutexLocker locker(mutex);
+    if(running)
+    {
+        stopped = true;
+    }
 }
 
 bool Worker::isESP32Cell(int row, int column, QList<ESP32> esp32devices)

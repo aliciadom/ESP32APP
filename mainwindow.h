@@ -47,8 +47,8 @@ signals:
     void querySignal(uint from, uint to,QListESP32 ESP32devices);
     void updateCellGridSignal(int row,int column,QString tooltip);
     void updateChartLayoutSignal(QMapList map);
-
     void doWorkSignal();
+    void stopWorkerSignal();
 public slots:
    void buttonUpdateSlot();
    void realTimeButtonSlot();
