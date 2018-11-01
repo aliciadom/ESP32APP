@@ -49,6 +49,7 @@ signals:
     void updateChartLayoutSignal(QMapList map);
     void doWorkSignal();
     void stopWorkerSignal();
+    void oneShotSignal();
 public slots:
    void buttonUpdateSlot();
    void realTimeButtonSlot();

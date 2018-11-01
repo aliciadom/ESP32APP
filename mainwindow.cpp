@@ -16,6 +16,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(&db, SIGNAL(updateGridSignal(QMapHashPacket)), this, SLOT(updateGridLayoutSlot(QMapHashPacket)));
     connect(this,SIGNAL(updateCellGridSignal(int, int, QString)),this,SLOT(updateCellGridSlot(int, int, QString)));
     connect(&timer,SIGNAL(timeout()), this, SLOT(updateRealTimeSlot()));
+    connect(this,SIGNAL(oneShotSignal()), this, SLOT(updateRealTimeSlot()));
     connect(ui->spinBox, SIGNAL(valueChanged(int)),this, SLOT(setAccuracySlot()));
     connect(this,SIGNAL(updateChartLayoutSignal(QMapList)),this,SLOT(updateChartLayoutSlot(QMapList)));
 
@@ -169,7 +170,8 @@ void MainWindow::realTimeButtonSlot()
             ui->dateTimeFrom->setEnabled(false);
             //ui->spinBox->setEnabled(false);
             //ui->checkBox->setEnabled(false);
-            timer.start(1000*40);
+            emit oneShotSignal();
+            timer.start(1000*60);
 
     }
     else
