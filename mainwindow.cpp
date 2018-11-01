@@ -167,8 +167,8 @@ void MainWindow::realTimeButtonSlot()
             //switch off
             ui->buttonUpdate->setEnabled(false);
             ui->dateTimeFrom->setEnabled(false);
-            ui->spinBox->setEnabled(false);
-            ui->checkBox->setEnabled(false);
+            //ui->spinBox->setEnabled(false);
+            //ui->checkBox->setEnabled(false);
             timer.start(1000*40);
 
     }
@@ -179,8 +179,8 @@ void MainWindow::realTimeButtonSlot()
         //switch on
         ui->buttonUpdate->setEnabled(true);
         ui->dateTimeFrom->setEnabled(true);
-        ui->spinBox->setEnabled(true);
-        ui->checkBox->setEnabled(true);
+        //ui->spinBox->setEnabled(true);
+        //ui->checkBox->setEnabled(true);
 
     }
 
@@ -244,10 +244,12 @@ void MainWindow::updateGridLayoutSlot2(QPackets packets , QChartMap chartmap, in
         QDateTime time;
         time.setTime_t(unixtime);
         s.append("{\n\tMAC: ").append(QString::fromUtf8(p.getMAC().c_str())).append("\n\t:").append(time.toString()).append("\n}\n");
+        qDebug() << QString::fromStdString(p.toString());
         emit updateCellGridSignal(point.ry(),point.rx(),s);
     }
     emit updateChartLayoutSignal(chartmap);
-    ui->buttonUpdate->setText("AGGIORNA");
+    if((ui->buttonUpdate->text()!="AGGIORNA"))
+        ui->buttonUpdate->setText("AGGIORNA");
     ui->deviceslabel->setText(QString::number(ndevices));
 
 }

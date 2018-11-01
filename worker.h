@@ -32,10 +32,15 @@ public slots:
     void setAccuracy(int accuracy);
     void setUtil(int nesp32, int x_min,int x_max,int y_min,int y_max);
     void setEsp32Devices(QMap<int, ESP32> esp32devices);
+
+    //
+    void readyToSendDataSlot();
 signals:
     void resultReadySignal(QPackets packets, QChartMap chartmap, int distinctDevices);
     void enableUpdateButtonSignal();
     void updateStateSignal();
+    //
+    void threadFinishedSignal();
 private:
     bool isESP32Cell(int row, int column, QList<ESP32> esp32devices);
     bool inRange(int packet, int esp32, int accuracy);
@@ -43,7 +48,7 @@ private:
     bool checkBoxIsChecked;
     QMapHashPacket hashmap;
     QMap<int, ESP32> esp32devices;
-    QMap<string,QPair<uint,QList<QPoint>>> recentMacPositionMap; // this map store the most recent position for a mac. mac<<time,places in the map>>
+     // this map store the most recent position for a mac. mac<<time,places in the map>>
     int accuracy;
     int nesp32;
     int y_min;
@@ -60,6 +65,8 @@ private:
 
     bool running,stopped;
     QMutex *mutex;
+    int jointedThread = 0;
+    int numberOfThreads = 4;
 };
 
 

@@ -5,12 +5,14 @@
 
 Worker::Worker():running(false),stopped(false){
     mutex = new QMutex();
+    connect(this,SIGNAL(threadFinishedSignal()),this,SLOT(readyToSendDataSlot()));
 }
 
 Worker::~Worker() {
 }
 
 void Worker::job0(int x_start, int x_end, int y_start, int y_end){
+    QMap<string,QPair<uint,QList<QPoint>>> recentMacPositionMap;
     qDebug() << "job0 started";
     for (int i = y_start; i < y_end; i++)
     {
@@ -48,6 +50,7 @@ void Worker::job0(int x_start, int x_end, int y_start, int y_end){
                         string packethash = p.getHash();
                         string mac = p.getMAC();
                         uint unixtime = p.getTimestamp();
+                                                { QMutexLocker locker(mutex);
                         if(!recentMacPositionMap.contains(mac))
                         {
                                 QList<QPoint> list;
@@ -77,12 +80,14 @@ void Worker::job0(int x_start, int x_end, int y_start, int y_end){
                                   QPoint qpoint(j,i);
                                   recentMacPositionMap[mac].second.push_back(qpoint);
                             }
+                          }
                         }
                     }
                 }
             }
         }
     }
+
     for(string s : recentMacPositionMap.keys())
     {
         QPair<uint,QList<QPoint>> qpair = recentMacPositionMap.value(s);
@@ -94,11 +99,13 @@ void Worker::job0(int x_start, int x_end, int y_start, int y_end){
 
         for(QPoint qp : qpair.second)
         {
-            QPair<Packet,QPoint> pairvalue = qMakePair(p,qp);;
+            QMutexLocker locker(mutex);
+            QPair<Packet,QPoint> pairvalue = qMakePair(p,qp);
             packets.push_back(pairvalue);
 
         }
-
+        {
+             QMutexLocker locker(mutex);
         if(!chartmap.contains(unixtime))
         {
             QList<string> list;
@@ -114,6 +121,7 @@ void Worker::job0(int x_start, int x_end, int y_start, int y_end){
         if(!distinctdevices.contains(hash))
         {
             distinctdevices.push_back(hash);
+        }
         }
     }
 }
@@ -155,14 +163,17 @@ void Worker::job1(int x_start, int x_end, int y_start, int y_end){
                                     string packethash = p.getHash();
                                     string mac = p.getMAC();
                                     uint unixtime = p.getTimestamp();
-
-
                                     QPoint qp(j,i);
-                                    QPair<Packet,QPoint> pairvalue = qMakePair(p,qp);;
-                                    packets.push_back(pairvalue);
+                                    QPair<Packet,QPoint> pairvalue = qMakePair(p,qp);
+                                    {
+                                        QMutexLocker locker(mutex);
+                                        packets.push_back(pairvalue);
+                                    }
 
+                                    {QMutexLocker locker(mutex);
                                     if(!distinctdevices.contains(packethash))
                                     {
+
                                         distinctdevices.push_back(packethash);
                                     }
                                     if(!chartmap.contains(unixtime))
@@ -178,6 +189,7 @@ void Worker::job1(int x_start, int x_end, int y_start, int y_end){
                                             list.append(mac);
 
                                     }
+                                    }
                                 }
                             }
                         }
@@ -185,60 +197,195 @@ void Worker::job1(int x_start, int x_end, int y_start, int y_end){
     }
 }
 
+void Worker::readyToSendDataSlot(){
+    QMutexLocker lm(mutex);
+    if(stopped){
+        jointedThread++;
+        if(jointedThread==numberOfThreads){
+            jointedThread = 0;
+            stopped = false;
+            running = false;
+        }
+    }
+    else{
+        jointedThread++;
+        if(jointedThread==numberOfThreads){
+            emit resultReadySignal(packets, chartmap, distinctdevices.count());
+            jointedThread=0;
+            running = false;
+            stopped = false;
+        }
+    }
+
+}
+
 void Worker::do_Work(){
 
     qDebug() << "do_Work called.. accuracy,xmin,xmax,ymin,ymax = " + QString::number(accuracy) +" " + QString::number(x_min) +" " + QString::number(x_max) +" " +QString::number(y_min) +" " + QString::number(y_max);
-
     packets.clear();
     distinctdevices.clear();
     chartmap.clear();
+    qDebug() << "Verifico che ho cancellato i dati" + QString::number(packets.size()) + " " +  QString::number(distinctdevices.size()) +" " + QString::number(chartmap.size());
 
     if(checkBoxIsChecked)
-    {
+    {             
         std::thread t([&](){
-            job0(x_min+1,x_max,y_min+1,y_max);
+            job0(x_min+1,x_max/2,y_min+1,y_max/2);
             {
                 QMutexLocker ml(mutex);
+
                 if(!stopped){
                     running = false;
-                    qDebug() << "job1 finished analysis";
+                    qDebug() << "job00 finished analysis";
                     qDebug() << distinctdevices.count();
-                    emit resultReadySignal(packets, chartmap, distinctdevices.count());
+                    //emit resultReadySignal(packets, chartmap, distinctdevices.count());
+                    emit threadFinishedSignal();
                 }
                 else{
-                    qDebug() << "job1 forced quit";
-                    running = true;
-                    stopped = false;
-                    do_Work();
+                    qDebug() << "job00 forced quit";
+                    emit threadFinishedSignal();
                 };
             }
         });
         t.detach();
+        std::thread t1([&](){
+            job0(x_max/2+1,x_max,y_min+1,y_max/2);
+            {
+                QMutexLocker ml(mutex);
 
+                if(!stopped){
+                    running = false;
+                    qDebug() << "job01 finished analysis";
+                    qDebug() << distinctdevices.count();
+                    //emit resultReadySignal(packets, chartmap, distinctdevices.count());
+                    emit threadFinishedSignal();
+                }
+                else{
+                    qDebug() << "job01 forced quit";
+                    emit threadFinishedSignal();
+                };
+            }
+        });
+        t1.detach();
+        std::thread t2([&](){
+            job0(x_min+1,x_max/2,y_max/2+1,y_max);
+            {
+                QMutexLocker ml(mutex);
+
+                if(!stopped){
+                    running = false;
+                    qDebug() << "job02 finished analysis";
+                    qDebug() << distinctdevices.count();
+                    //emit resultReadySignal(packets, chartmap, distinctdevices.count());
+                    emit threadFinishedSignal();
+                }
+                else{
+                    qDebug() << "job02 forced quit";
+                    emit threadFinishedSignal();
+                };
+            }
+        });
+        t2.detach();
+        std::thread t3([&](){
+            job0(x_max/2+1,x_max,y_max/2+1,y_max);
+            {
+                QMutexLocker ml(mutex);
+
+                if(!stopped){
+                    running = false;
+                    qDebug() << "job03 finished analysis";
+                    qDebug() << distinctdevices.count();
+                    //emit resultReadySignal(packets, chartmap, distinctdevices.count());
+                    emit threadFinishedSignal();
+                }
+                else{
+                    qDebug() << "job03 forced quit";
+                    emit threadFinishedSignal();
+                };
+            }
+        });
+        t3.detach();
 
 
     }
     else
     {
         std::thread t([&](){
-            job1(x_min+1,x_max,y_min+1,y_max);
+            job1(x_min+1,x_max/2,y_min+1,y_max/2);
             {
                 QMutexLocker ml(mutex);
 
                 if(!stopped){
                     running = false;
-                    qDebug() << "job1 finished analysis";
+                    qDebug() << "job10 finished analysis";
                     qDebug() << distinctdevices.count();
-                    emit resultReadySignal(packets, chartmap, distinctdevices.count());
+                    //emit resultReadySignal(packets, chartmap, distinctdevices.count());
+                    emit threadFinishedSignal();
                 }
                 else{
-                    qDebug() << "job1 forced quit";
-                    running = false;
-                    stopped = false;
+                    qDebug() << "job10 forced quit";
+                    emit threadFinishedSignal();
                 };
             }
         });
         t.detach();
+        std::thread t1([&](){
+            job1(x_max/2+1,x_max,y_min+1,y_max/2);
+            {
+                QMutexLocker ml(mutex);
+
+                if(!stopped){
+                    running = false;
+                    qDebug() << "job11 finished analysis";
+                    qDebug() << distinctdevices.count();
+                    //emit resultReadySignal(packets, chartmap, distinctdevices.count());
+                    emit threadFinishedSignal();
+                }
+                else{
+                    qDebug() << "job11 forced quit";
+                    emit threadFinishedSignal();
+                };
+            }
+        });
+        t1.detach();
+        std::thread t2([&](){
+            job1(x_min+1,x_max/2,y_max/2+1,y_max);
+            {
+                QMutexLocker ml(mutex);
+
+                if(!stopped){
+                    running = false;
+                    qDebug() << "job12 finished analysis";
+                    qDebug() << distinctdevices.count();
+                    //emit resultReadySignal(packets, chartmap, distinctdevices.count());
+                    emit threadFinishedSignal();
+                }
+                else{
+                    qDebug() << "job12 forced quit";
+                    emit threadFinishedSignal();
+                };
+            }
+        });
+        t2.detach();
+        std::thread t3([&](){
+            job1(x_max/2+1,x_max,y_max/2+1,y_max);
+            {
+                QMutexLocker ml(mutex);
+
+                if(!stopped){
+                    running = false;
+                    qDebug() << "job13 finished analysis";
+                    qDebug() << distinctdevices.count();
+                    //emit resultReadySignal(packets, chartmap, distinctdevices.count());
+                    emit threadFinishedSignal();
+                }
+                else{
+                    qDebug() << "job13 forced quit";
+                    emit threadFinishedSignal();
+                };
+            }
+        });
+        t3.detach();
 
     }
 
@@ -294,7 +441,6 @@ void Worker::SetheckBoxIsChecked(bool checkBoxIsChecked)
 void Worker::SetQMapHashPacket(QMapHashPacket hashmap)
 {
     this->hashmap = hashmap;
-    qDebug() << "fuck";
 }
 
 void Worker::setUtil(int nesp32, int x_min,int x_max,int y_min,int y_max){
