@@ -249,6 +249,7 @@ void MainWindow::updateGridLayoutSlot2(QPackets packets , QChartMap chartmap, in
     emit updateChartLayoutSignal(chartmap);
     ui->buttonUpdate->setText("AGGIORNA");
     ui->deviceslabel->setText(QString::number(ndevices));
+
 }
 void MainWindow::updateCellGridSlot(int row, int column, QString tooltip)
 {
