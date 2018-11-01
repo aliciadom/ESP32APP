@@ -249,7 +249,7 @@ void Worker::do_Work(){
         });
         t.detach();
         std::thread t1([&](){
-            job0(x_max/2+1,x_max,y_min+1,y_max/2);
+            job0(x_max/2,x_max,y_min+1,y_max/2);
             {
                 QMutexLocker ml(mutex);
 
@@ -268,7 +268,7 @@ void Worker::do_Work(){
         });
         t1.detach();
         std::thread t2([&](){
-            job0(x_min+1,x_max/2,y_max/2+1,y_max);
+            job0(x_min+1,x_max/2,y_max/2,y_max);
             {
                 QMutexLocker ml(mutex);
 
@@ -287,7 +287,7 @@ void Worker::do_Work(){
         });
         t2.detach();
         std::thread t3([&](){
-            job0(x_max/2+1,x_max,y_max/2+1,y_max);
+            job0(x_max/2,x_max,y_max/2,y_max);
             {
                 QMutexLocker ml(mutex);
 

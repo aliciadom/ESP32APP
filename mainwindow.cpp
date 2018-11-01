@@ -161,9 +161,9 @@ void MainWindow::clearGridLayout()
 */
 void MainWindow::realTimeButtonSlot()
 {
-    if(ui->startButton->text()=="TEMPO REALE")
+    if(ui->startButton->text()=="AVVIA")
     {
-            ui->startButton->setText("STOP TEMPO REALE");
+            ui->startButton->setText("FERMA");
             ui->deviceslabel->setText(QString::number(0));
             //switch off
             ui->buttonUpdate->setEnabled(false);
@@ -176,8 +176,9 @@ void MainWindow::realTimeButtonSlot()
     }
     else
     {
-        ui->startButton->setText("TEMPO REALE");
+        ui->startButton->setText("AVVIA");
         timer.stop();
+        emit stopWorkerSignal();
         //switch on
         ui->buttonUpdate->setEnabled(true);
         ui->dateTimeFrom->setEnabled(true);
